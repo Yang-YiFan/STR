@@ -3,9 +3,9 @@
 arch: ResNet50
 
 # ===== Dataset ===== #
-data: /mnt/data/
+data: /data/sanchez/benchmarks/yifany/
 set: ImageNet
-name: STR_90.23
+name: STR_98.98
 
 # ===== Learning Rate Policy ======== #
 optimizer: sgd
@@ -27,7 +27,7 @@ init: kaiming_normal
 mode: fan_in
 nonlinearity: relu
 sparse_function: sigmoid
-sInit_value: -3200 # Change this according to reported numbers in appendix
+sInit_value: -12800 # Change this according to reported numbers in appendix
 
 # ===== Hardware setup ===== #
 workers: 20

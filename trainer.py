@@ -8,6 +8,7 @@ from utils.logging import AverageMeter, ProgressMeter
 
 __all__ = ["train", "validate"]
 
+use_cuda = torch.cuda.is_available()
 
 def train(train_loader, model, criterion, optimizer, epoch, args, writer):
     batch_time = AverageMeter("Time", ":6.3f")
@@ -33,10 +34,11 @@ def train(train_loader, model, criterion, optimizer, epoch, args, writer):
         # measure data loading time
         data_time.update(time.time() - end)
 
-        if args.gpu is not None:
-            images = images.cuda(args.gpu, non_blocking=True)
+        if use_cuda:
+            if args.gpu is not None:
+                images = images.cuda(args.gpu, non_blocking=True)
 
-        target = target.cuda(args.gpu, non_blocking=True).long()
+            target = target.cuda(args.gpu, non_blocking=True).long()
 
         # compute output
         output = model(images)
@@ -83,10 +85,11 @@ def validate(val_loader, model, criterion, args, writer, epoch):
         for i, (images, target) in tqdm.tqdm(
             enumerate(val_loader), ascii=True, total=len(val_loader)
         ):
-            if args.gpu is not None:
-                images = images.cuda(args.gpu, non_blocking=True)
+            if use_cuda:
+                if args.gpu is not None:
+                    images = images.cuda(args.gpu, non_blocking=True)
 
-            target = target.cuda(args.gpu, non_blocking=True).long()
+                target = target.cuda(args.gpu, non_blocking=True).long()
 
             # compute output
             output = model(images)

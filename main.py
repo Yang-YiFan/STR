@@ -26,6 +26,7 @@ from trainer import train, validate
 import data
 import models
 
+use_cuda = torch.cuda.is_available()
 
 def main():
     print(args)
@@ -77,7 +78,9 @@ def main_worker(args):
     lr_policy = get_policy(args.lr_policy)(optimizer, args)
 
     if args.label_smoothing is None:
-        criterion = nn.CrossEntropyLoss().cuda()
+        criterion = nn.CrossEntropyLoss()
+        if use_cuda:
+            criterion = criterion.cuda()
     else:
         criterion = LabelSmoothing(smoothing=args.label_smoothing)
 
@@ -95,6 +98,19 @@ def main_worker(args):
         acc1, acc5 = validate(
             data.val_loader, model, criterion, args, writer=None, epoch=args.start_epoch
         )
+
+        print("###   sparsity summary   ###")
+        if args.conv_type == "STRConv":
+            count = 0
+            sum_sparse = 0.0
+            for n, m in model.named_modules():
+                if isinstance(m, STRConv):
+                    sparsity, total_params, thresh = m.getSparsity()
+                    print("sparsity/{}".format(n), sparsity)
+                    sum_sparse += int(((100 - sparsity) / 100) * total_params)
+                    count += total_params
+            total_sparsity = 100 - (100 * sum_sparse / count)
+            print("sparsity/total", total_sparsity)
         return
 
     writer = SummaryWriter(log_dir=log_base_dir)
@@ -241,19 +257,20 @@ def main_worker(args):
 
 
 def set_gpu(args, model):
-    if args.gpu is not None:
-        torch.cuda.set_device(args.gpu)
-        model = model.cuda(args.gpu)
-    else:
-        # DataParallel will divide and allocate batch_size to all available GPUs
-        print(f"=> Parallelizing on {args.multigpu} gpus")
-        torch.cuda.set_device(args.multigpu[0])
-        args.gpu = args.multigpu[0]
-        model = torch.nn.DataParallel(model, device_ids=args.multigpu).cuda(
-            args.multigpu[0]
-        )
+    if use_cuda:
+        if args.gpu is not None:
+            torch.cuda.set_device(args.gpu)
+            model = model.cuda(args.gpu)
+        else:
+            # DataParallel will divide and allocate batch_size to all available GPUs
+            print(f"=> Parallelizing on {args.multigpu} gpus")
+            torch.cuda.set_device(args.multigpu[0])
+            args.gpu = args.multigpu[0]
+            model = torch.nn.DataParallel(model, device_ids=args.multigpu).cuda(
+                args.multigpu[0]
+            )
 
-    cudnn.benchmark = True
+        cudnn.benchmark = True
 
     return model
 
@@ -283,22 +300,32 @@ def resume(args, model, optimizer):
 def pretrained(args, model):
     if os.path.isfile(args.pretrained):
         print("=> loading pretrained weights from '{}'".format(args.pretrained))
-        pretrained = torch.load(
-            args.pretrained,
-            map_location=torch.device("cuda:{}".format(args.multigpu[0])),
-        )["state_dict"]
+        if use_cuda:
+            pretrained = torch.load(
+                args.pretrained,
+                map_location=torch.device("cuda:{}".format(args.multigpu[0])),
+            )["state_dict"]
+        else:
+            pretrained = torch.load(
+                args.pretrained,
+                map_location=torch.device('cpu'),
+            )["state_dict"]
 
         model_state_dict = model.state_dict()
 
-        if not args.ignore_pretrained_weights:
+        #if not args.ignore_pretrained_weights:
+        if True:
 
-            pretrained_final = {
-                k: v
-                for k, v in pretrained.items()
-                if (k in model_state_dict and v.size() == model_state_dict[k].size())
-            }
+            pretrained_final = {}
+            for k, v in pretrained.items():
+                if k.startswith("module."): # pretrained model store as dataparallel module
+                    key = k[7:]
+                else:
+                    key = k
+                if (key in model_state_dict and v.size() == model_state_dict[key].size()):
+                    pretrained_final[key] = v
 
-            if args.conv_type != "STRConv":
+            if args.conv_type != "STRConv": # TODO: this also suffers from the extra "module." in key issue
                 for k, v in pretrained.items():
                     if 'sparseThreshold' in k:
                         wkey = k.split('sparse')[0] + 'weight'
