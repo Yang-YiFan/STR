@@ -44,7 +44,7 @@ def main():
 
     for n, m in model.named_modules():
         if isinstance(m, STRConv):
-            print(n, m, m.getSparseWeight().shape)
+            #print(n, m, m.getSparseWeight().shape)
             saveTensor(args, n, 'weight', m.getSparseWeight())
             m.register_forward_hook(get_activation(args, n, 'in'))
             m.register_forward_hook(get_activation(args, n, 'out'))
@@ -68,13 +68,13 @@ def main():
             # compute output
             output = model(images)
 
-            assert in_activation['conv1'] == images
+            assert torch.equal(in_activation['conv1'], images)
 
     # check correctness
     with torch.no_grad():
         for n, m in model.named_modules():
             if isinstance(m, STRConv):
-                assert m(in_activation[n]) == out_activation[n]
+                assert torch.equal(m(in_activation[n]), out_activation[n])
 
 
 def get_activation(args, name, mode):
@@ -82,8 +82,8 @@ def get_activation(args, name, mode):
         in_activation[name] = input[0].detach()
         saveTensor(args, name, mode, input[0].detach())
     def out_hook(model, input, output):
-        out_activation[name] = output[0].detach()
-        saveTensor(args, name, mode, output[0].detach())
+        out_activation[name] = output.detach()
+        saveTensor(args, name, mode, output.detach())
     if mode == 'in':
         return in_hook
     elif mode == 'out':
@@ -95,7 +95,7 @@ def saveTensor(args, name, mode, data):
     assert mode in ['weight', 'in', 'out']
     print("saving", name, mode, data.shape)
 
-    save_dir = pathlib.Path(f"inputs/{mode}/{args.arch+args.name}")
+    save_dir = pathlib.Path(f"/data/sanchez/benchmarks/yifany/sconv/inputs/{args.arch+args.name}/{mode}")
 
     if not save_dir.exists():
         os.makedirs(save_dir)
@@ -104,7 +104,7 @@ def saveTensor(args, name, mode, data):
         content = []
 
         content.append("%%MatrixMarket matrix coordinate real general")
-        content.append("% tensor")
+        content.append("% {} tensor".format(mode))
 
         sizes = list(data.shape)
         content.append(" ".join([str(x) for x in sizes]))
@@ -113,7 +113,7 @@ def saveTensor(args, name, mode, data):
         indices = data.indices().T.tolist()
         for idx in range(data.values().size()[0]): # only store coordinates
             coordinates = indices[idx]
-            content.append(" ".join([str(x) for x in coordinates]))
+            content.append(" ".join([str(x+1) for x in coordinates]))
 
         fp.write("\n".join(content))
 
