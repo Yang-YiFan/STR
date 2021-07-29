@@ -22,6 +22,8 @@ import data
 import models
 
 use_cuda = torch.cuda.is_available()
+in_activation = {}
+out_activation = {}
 
 def main():
     print(args)
@@ -48,9 +50,6 @@ def main():
             m.register_forward_hook(get_activation(args, n, 'out'))
             #print(m.getSparseWeight())
 
-    in_activation = {}
-    out_activation = {}
-
     # switch to evaluate mode
     model.eval()
 
@@ -72,18 +71,19 @@ def main():
             assert in_activation['conv1'] == images
 
     # check correctness
-    for n, m in model.named_modules():
-        if isinstance(m, STRConv):
-            assert m(in_activation[n]) == out_activation[n]
+    with torch.no_grad():
+        for n, m in model.named_modules():
+            if isinstance(m, STRConv):
+                assert m(in_activation[n]) == out_activation[n]
 
 
 def get_activation(args, name, mode):
     def in_hook(model, input, output):
-        in_activation[name] = input.detach()
-        saveTensor(args, name, mode, input.detach())
+        in_activation[name] = input[0].detach()
+        saveTensor(args, name, mode, input[0].detach())
     def out_hook(model, input, output):
-        out_activation[name] = output.detach()
-        saveTensor(args, name, mode, output.detach())
+        out_activation[name] = output[0].detach()
+        saveTensor(args, name, mode, output[0].detach())
     if mode == 'in':
         return in_hook
     elif mode == 'out':
@@ -93,6 +93,7 @@ def get_activation(args, name, mode):
 
 def saveTensor(args, name, mode, data):
     assert mode in ['weight', 'in', 'out']
+    print("saving", name, mode, data.shape)
 
     save_dir = pathlib.Path(f"inputs/{mode}/{args.arch+args.name}")
 
@@ -100,11 +101,13 @@ def saveTensor(args, name, mode, data):
         os.makedirs(save_dir)
 
     with (save_dir / "{}.mtx".format(name)).open('w') as fp:
-        fp.write("%%MatrixMarket matrix coordinate real general\n")
-        fp.write("% tensor\n")
+        content = []
+
+        content.append("%%MatrixMarket matrix coordinate real general")
+        content.append("% tensor")
 
         sizes = list(data.shape)
-        fp.write(" ".join([str(x) for x in sizes]) + "\n")
+        content.append(" ".join([str(x) for x in sizes]))
 
         bases = [1]
         for i in range(len(sizes)):
@@ -115,8 +118,10 @@ def saveTensor(args, name, mode, data):
         for idx in range(bases[0]): # only store coordinates
             if flatten_data[idx] != 0.0:
                 coordinates = [(idx//bases[i+1])%sizes[i]+1 for i in range(len(sizes))]
-                fp.write(" ".join([str(x) for x in coordinates]) + "\n")
+                content.append(" ".join([str(x) for x in coordinates]))
                 all_nnz.append(coordinates)
+
+        fp.write("\n".join(content))
 
         # check correctness
         count = 0
