@@ -42,8 +42,20 @@ def main():
     for n, m in model.named_modules():
         if isinstance(m, STRConv):
             print(n, m, m.getSparseWeight().shape)
+            saveTensor(args, n, m.getSparseWeight())
             #print(m.getSparseWeight())
 
+def saveTensor(args, name, data):
+    save_dir = pathlib.Path(f"inputs/weight/{args.arch+args.name}")
+
+    if not save_dir.exists():
+        os.makedirs(save_dir)
+
+    with (save_dir / "%s.mtx" % name).open('w') as fp:
+        fp.write("%%MatrixMarket matrix coordinate real general\n")
+        fp.write("% tensor\n")
+        fp.write(" ".join([str(x) for x in list(data.shape)]) + "\n")
+        
 
 def pretrained(args, model):
     assert args.pretrained
