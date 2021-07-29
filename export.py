@@ -4,6 +4,7 @@ import random
 import shutil
 import time
 import json
+import tqdm
 
 import torch
 import torch.nn as nn
@@ -42,11 +43,58 @@ def main():
     for n, m in model.named_modules():
         if isinstance(m, STRConv):
             print(n, m, m.getSparseWeight().shape)
-            saveTensor(args, n, m.getSparseWeight())
+            saveTensor(args, n, 'weight', m.getSparseWeight())
+            m.register_forward_hook(get_activation(args, n, 'in'))
+            m.register_forward_hook(get_activation(args, n, 'out'))
             #print(m.getSparseWeight())
 
-def saveTensor(args, name, data):
-    save_dir = pathlib.Path(f"inputs/weight/{args.arch+args.name}")
+    in_activation = {}
+    out_activation = {}
+
+    # switch to evaluate mode
+    model.eval()
+
+    with torch.no_grad():
+        for i, (images, target) in tqdm.tqdm(
+            enumerate(data.val_loader), ascii=True, total=len(data.val_loader)
+        ):
+            if i > 0: break
+
+            if use_cuda:
+                if args.gpu is not None:
+                    images = images.cuda(args.gpu, non_blocking=True)
+
+                target = target.cuda(args.gpu, non_blocking=True).long()
+
+            # compute output
+            output = model(images)
+
+            assert in_activation['conv1'] == images
+
+    # check correctness
+    for n, m in model.named_modules():
+        if isinstance(m, STRConv):
+            assert m(in_activation[n]) == out_activation[n]
+
+
+def get_activation(args, name, mode):
+    def in_hook(model, input, output):
+        in_activation[name] = input.detach()
+        saveTensor(args, name, mode, input.detach())
+    def out_hook(model, input, output):
+        out_activation[name] = output.detach()
+        saveTensor(args, name, mode, output.detach())
+    if mode == 'in':
+        return in_hook
+    elif mode == 'out':
+        return out_hook
+    else:
+        assert False
+
+def saveTensor(args, name, mode, data):
+    assert mode in ['weight', 'in', 'out']
+
+    save_dir = pathlib.Path(f"inputs/{mode}/{args.arch+args.name}")
 
     if not save_dir.exists():
         os.makedirs(save_dir)
