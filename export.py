@@ -109,30 +109,14 @@ def saveTensor(args, name, mode, data):
         sizes = list(data.shape)
         content.append(" ".join([str(x) for x in sizes]))
 
-        bases = [1]
-        for i in range(len(sizes)):
-            bases.insert(0, bases[0]*sizes[len(sizes)-1-i])
-        flatten_data = data.view(-1)
-        assert flatten_data.shape[0] == bases[0]
-        all_nnz = []
-        for idx in range(bases[0]): # only store coordinates
-            if flatten_data[idx] != 0.0:
-                coordinates = [(idx//bases[i+1])%sizes[i]+1 for i in range(len(sizes))]
-                content.append(" ".join([str(x) for x in coordinates]))
-                all_nnz.append(coordinates)
+        data = data.to_sparse()
+        indices = data.indices().T.tolist()
+        for idx in range(data.values().size()[0]): # only store coordinates
+            coordinates = indices[idx]
+            content.append(" ".join([str(x) for x in coordinates]))
 
         fp.write("\n".join(content))
 
-        # check correctness
-        count = 0
-        for i in range(sizes[0]):
-            for j in range(sizes[1]):
-                for k in range(sizes[2]):
-                    for l in range(sizes[3]):
-                        if data[i][j][k][l].item() != 0.0:
-                            assert [i+1,j+1,k+1,l+1] == all_nnz[count]
-                            count += 1
-        assert count == len(all_nnz)
 
 def pretrained(args, model):
     assert args.pretrained
