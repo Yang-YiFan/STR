@@ -46,6 +46,9 @@ class STRConv(nn.Conv2d):
         temp[temp!=0] = 1
         return (100 - temp.mean().item()*100), temp.numel(), f(self.sparseThreshold).item()
 
+    def getSparseWeight(self):
+        return sparseFunction(self.weight, self.sparseThreshold,  self.activation, self.f)
+
 class ChooseEdges(autograd.Function):
     @staticmethod
     def forward(ctx, weight, prune_rate):
