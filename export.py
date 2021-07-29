@@ -51,11 +51,35 @@ def saveTensor(args, name, data):
     if not save_dir.exists():
         os.makedirs(save_dir)
 
-    with (save_dir / "%s.mtx" % name).open('w') as fp:
+    with (save_dir / "{}.mtx".format(name)).open('w') as fp:
         fp.write("%%MatrixMarket matrix coordinate real general\n")
         fp.write("% tensor\n")
-        fp.write(" ".join([str(x) for x in list(data.shape)]) + "\n")
-        
+
+        sizes = list(data.shape)
+        fp.write(" ".join([str(x) for x in sizes]) + "\n")
+
+        bases = [1]
+        for i in range(len(sizes)):
+            bases.insert(0, bases[0]*sizes[len(sizes)-1-i])
+        flatten_data = data.view(-1)
+        assert flatten_data.shape[0] == bases[0]
+        all_nnz = []
+        for idx in range(bases[0]): # only store coordinates
+            if flatten_data[idx] != 0.0:
+                coordinates = [(idx//bases[i+1])%sizes[i]+1 for i in range(len(sizes))]
+                fp.write(" ".join([str(x) for x in coordinates]) + "\n")
+                all_nnz.append(coordinates)
+
+        # check correctness
+        count = 0
+        for i in range(sizes[0]):
+            for j in range(sizes[1]):
+                for k in range(sizes[2]):
+                    for l in range(sizes[3]):
+                        if data[i][j][k][l].item() != 0.0:
+                            assert [i+1,j+1,k+1,l+1] == all_nnz[count]
+                            count += 1
+        assert count == len(all_nnz)
 
 def pretrained(args, model):
     assert args.pretrained
