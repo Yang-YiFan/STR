@@ -24,6 +24,7 @@ import models
 use_cuda = torch.cuda.is_available()
 in_activation = {}
 out_activation = {}
+use_permute = False
 
 def main():
     print(args)
@@ -95,6 +96,7 @@ def saveTensor(args, name, mode, data):
     assert mode in ['weight', 'in', 'out']
     print("saving", name, mode, data.shape)
 
+    dir_name = "inputs" if not use_permute else "inputs_gustavson"
     save_dir = pathlib.Path(f"/data/sanchez/benchmarks/yifany/sconv/inputs/{args.arch+args.name}/{mode}")
 
     if not save_dir.exists():
@@ -105,6 +107,12 @@ def saveTensor(args, name, mode, data):
 
         content.append("%%MatrixMarket matrix coordinate real general")
         content.append("% {} tensor".format(mode))
+
+        if use_permute:
+            if mode == 'weight': # it is not rank agnostic
+                data = data.permute(1, 2, 3, 0)
+            elif mode == 'out':
+                data = data.permute(0, 2, 3, 1)
 
         sizes = list(data.shape)
         content.append(" ".join([str(x) for x in sizes]))
