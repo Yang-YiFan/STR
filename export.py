@@ -25,6 +25,7 @@ use_cuda = torch.cuda.is_available()
 in_activation = {}
 out_activation = {}
 use_permute = False
+torch.set_num_threads(16)
 
 def main():
     print(args)
@@ -43,13 +44,17 @@ def main():
 
     data = get_dataset(args)
 
+    hooks = []
+
     for n, m in model.named_modules():
         if isinstance(m, STRConv):
             #print(n, m, m.getSparseWeight().shape)
             saveTensor(args, n, 'weight', m.getSparseWeight())
-            m.register_forward_hook(get_activation(args, n, 'in'))
-            m.register_forward_hook(get_activation(args, n, 'out'))
+            handle1 = m.register_forward_hook(get_activation(args, n, 'in'))
+            handle2 = m.register_forward_hook(get_activation(args, n, 'out'))
             #print(m.getSparseWeight())
+            hooks.append(handle1)
+            hooks.append(handle2)
 
     # switch to evaluate mode
     model.eval()
@@ -70,6 +75,10 @@ def main():
             output = model(images)
 
             assert torch.equal(in_activation['conv1'], images)
+
+    # remove all hooks
+    for hook in hooks:
+        hook.remove()
 
     # check correctness
     with torch.no_grad():
@@ -97,31 +106,39 @@ def saveTensor(args, name, mode, data):
     print("saving", name, mode, data.shape)
 
     dir_name = "inputs" if not use_permute else "inputs_gustavson"
-    save_dir = pathlib.Path(f"/data/sanchez/benchmarks/yifany/sconv/inputs/{args.arch+args.name}/{mode}")
+    #save_dir = pathlib.Path(f"/data/sanchez/benchmarks/yifany/sconv/{dir_name}/{args.arch+args.name}/{mode}")
+    save_dir = pathlib.Path(f"/scratch/yifany/sconv/{dir_name}/{args.arch+args.name}/{mode}")
 
     if not save_dir.exists():
         os.makedirs(save_dir)
 
-    with (save_dir / "{}.mtx".format(name)).open('w') as fp:
+    if use_permute:
+        if mode == 'weight': # it is not rank agnostic
+            data = data.permute(1, 2, 3, 0)
+        elif mode == 'out':
+            data = data.permute(0, 2, 3, 1)
+
+    with (save_dir / "{}.info".format(name)).open('w') as fp:
         content = []
 
-        content.append("%%MatrixMarket matrix coordinate real general")
-        content.append("% {} tensor".format(mode))
+        content.append("# Metadata for the tensor")
+        content.append("# type {} tensor".format(mode))
 
-        if use_permute:
-            if mode == 'weight': # it is not rank agnostic
-                data = data.permute(1, 2, 3, 0)
-            elif mode == 'out':
-                data = data.permute(0, 2, 3, 1)
+        content.append("# nnz " + str(data.to_sparse().values().size()[0]) + " sparsity ratio " + str(1.0 - data.to_sparse().values().size()[0] / data.reshape(-1).size()[0]))
 
         sizes = list(data.shape)
-        content.append(" ".join([str(x) for x in sizes]))
+        content.append("# uncompressed shape "+" ".join([str(x) for x in sizes]))
+
+        fp.write("\n".join(content))
+
+    with (save_dir / "{}.tns".format(name)).open('w') as fp:
+        content = []
 
         data = data.to_sparse()
         indices = data.indices().T.tolist()
-        for idx in range(data.values().size()[0]): # only store coordinates
+        for idx in range(data.values().size()[0]): # store coordinates first, then values
             coordinates = indices[idx]
-            content.append(" ".join([str(x+1) for x in coordinates]))
+            content.append(" ".join([str(x+1) for x in coordinates]) + " " + str(data.values()[idx].item())) # coordinates start at 1
 
         fp.write("\n".join(content))
 
