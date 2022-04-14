@@ -15,12 +15,11 @@ import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed
 
-from utils.conv_type import sparseFunction
-
 from args import args
 
 import data
 import torchvision.models as models
+import torch.nn.utils.prune as prune
 
 from export import get_activation, saveTensor, saveBn, get_dataset
 
@@ -40,7 +39,7 @@ def main():
         torch.cuda.manual_seed_all(args.seed)
 
     # create model
-    model = get_model(args)
+    sparsity, model = get_model(args)
 
     data = get_dataset(args)
 
@@ -51,15 +50,20 @@ def main():
             saveBn(args, n, [m.weight.tolist(), m.bias.tolist(), m.running_mean.tolist(), m.running_var.tolist(), m.eps])
 
     hooks = []
+    count = 0
     for n, m in model.named_modules():
         if isinstance(m, nn.Conv2d):
             #print(n, m, m.weight.shape)
-            saveTensor(args, n, 'weight', sparseFunction(m.weight, torch.tensor([-100]))) # alexnet have bias, ignore it for now
+            prune.l1_unstructured(m, name="weight", amount=sparsity[count])
+            saveTensor(args, n, 'weight', m.weight) # alexnet have bias, ignore it for now
             handle1 = m.register_forward_hook(get_activation(args, n, 'in', in_activation, out_activation))
             handle2 = m.register_forward_hook(get_activation(args, n, 'out', in_activation, out_activation))
             #print(m.getSparseWeight())
             hooks.append(handle1)
             hooks.append(handle2)
+            count += 1
+
+    assert count == len(sparsity)
 
     # switch to evaluate mode
     model.eval()
@@ -89,17 +93,21 @@ def main():
     with torch.no_grad():
         for n, m in model.named_modules():
             if isinstance(m, nn.Conv2d):
+                print("checking", n)
                 assert torch.equal(m(in_activation[n]), out_activation[n])
 
 
 def get_model(args):
     if args.arch == "AlexNet":
+        sparsity = []
         model = models.alexnet(pretrained=True)
         assert False # somehow the export check fails for alexnet
     elif args.arch == "VGG16_BN":
+        # table 3 of SparTen paper
+        sparsity = [0.42, 0.79, 0.66, 0.64, 0.47, 0.76, 0.58, 0.68, 0.73, 0.66, 0.68, 0.71, 0.64]
         model = models.vgg16_bn(pretrained=True)
 
-    return model
+    return sparsity, model
 
 
 if __name__ == "__main__":
