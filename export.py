@@ -5,6 +5,7 @@ import shutil
 import time
 import json
 import tqdm
+import math
 
 import torch
 import torch.nn as nn
@@ -24,8 +25,8 @@ import models
 use_cuda = torch.cuda.is_available()
 in_activation = {}
 out_activation = {}
-use_permute = False
 torch.set_num_threads(16)
+base_dir = f"/scratch/yifany/sconv/inputs/{args.arch+args.name}"
 
 def main():
     print(args)
@@ -44,8 +45,13 @@ def main():
 
     data = get_dataset(args)
 
-    hooks = []
+    # export BN
+    for n, m in model.named_modules():
+        if isinstance(m, nn.BatchNorm2d):
+            print(n, m)
+            saveBn(args, n, [m.weight.tolist(), m.bias.tolist(), m.running_mean.tolist(), m.running_var.tolist(), m.eps])
 
+    hooks = []
     for n, m in model.named_modules():
         if isinstance(m, STRConv):
             #print(n, m, m.getSparseWeight().shape)
@@ -105,18 +111,11 @@ def saveTensor(args, name, mode, data):
     assert mode in ['weight', 'in', 'out']
     print("saving", name, mode, data.shape)
 
-    dir_name = "inputs" if not use_permute else "inputs_gustavson"
-    #save_dir = pathlib.Path(f"/data/sanchez/benchmarks/yifany/sconv/{dir_name}/{args.arch+args.name}/{mode}")
-    save_dir = pathlib.Path(f"/scratch/yifany/sconv/{dir_name}/{args.arch+args.name}/{mode}")
+    #save_dir = pathlib.Path(f"/data/sanchez/benchmarks/yifany/sconv/inputs/{args.arch+args.name}/{mode}")
+    save_dir = pathlib.Path(f"{base_dir}/{mode}")
 
     if not save_dir.exists():
         os.makedirs(save_dir)
-
-    if use_permute:
-        if mode == 'weight': # it is not rank agnostic
-            data = data.permute(1, 2, 3, 0)
-        elif mode == 'out':
-            data = data.permute(0, 2, 3, 1)
 
     with (save_dir / "{}.info".format(name)).open('w') as fp:
         content = []
@@ -139,6 +138,31 @@ def saveTensor(args, name, mode, data):
         for idx in range(data.values().size()[0]): # store coordinates first, then values
             coordinates = indices[idx]
             content.append(" ".join([str(x+1) for x in coordinates]) + " " + str(data.values()[idx].item())) # coordinates start at 1
+
+        fp.write("\n".join(content))
+
+def saveBn(args, name, data): # data = [weight, bias, running_mean, running_var, eps]
+
+    save_dir = pathlib.Path(f"{base_dir}/bn")
+
+    if not save_dir.exists():
+        os.makedirs(save_dir)
+
+    with (save_dir / "{}.txt".format(name)).open('w') as fp:
+        size = len(data[0])
+        content = []
+
+        content.append(str(size))
+        weight = []
+        bias = []
+        for i in range(size):
+            weight.append(1.0 * data[0][i] / math.sqrt(data[3][i] + data[4]))
+            bias.append(data[1][i] - 1.0 * data[0][i] * data[2][i] / math.sqrt(data[3][i] + data[4]))
+
+        tensors = [weight, bias]
+        for tensor in tensors:
+            tensor1 = [str(x) for x in tensor]
+            content += tensor1
 
         fp.write("\n".join(content))
 
