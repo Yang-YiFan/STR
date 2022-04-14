@@ -15,6 +15,8 @@ import torch.optim
 import torch.utils.data
 import torch.utils.data.distributed
 
+from utils.conv_type import sparseFunction
+
 from args import args
 
 import data
@@ -50,7 +52,7 @@ def main():
     for n, m in model.named_modules():
         if isinstance(m, nn.Conv2d):
             #print(n, m, m.getSparseWeight().shape)
-            saveTensor(args, n, 'weight', m.getSparseWeight())
+            saveTensor(args, n, 'weight', sparseFunction(m.weight, 0)) # alexnet have bias, ignore it for now
             handle1 = m.register_forward_hook(get_activation(args, n, 'in'))
             handle2 = m.register_forward_hook(get_activation(args, n, 'out'))
             #print(m.getSparseWeight())
