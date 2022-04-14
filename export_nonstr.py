@@ -51,8 +51,8 @@ def main():
     hooks = []
     for n, m in model.named_modules():
         if isinstance(m, nn.Conv2d):
-            #print(n, m, m.getSparseWeight().shape)
-            saveTensor(args, n, 'weight', sparseFunction(m.weight, 0)) # alexnet have bias, ignore it for now
+            #print(n, m, m.weight.shape)
+            saveTensor(args, n, 'weight', sparseFunction(m.weight, torch.tensor([-100]))) # alexnet have bias, ignore it for now
             handle1 = m.register_forward_hook(get_activation(args, n, 'in'))
             handle2 = m.register_forward_hook(get_activation(args, n, 'out'))
             #print(m.getSparseWeight())

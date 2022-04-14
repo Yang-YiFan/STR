@@ -5,7 +5,7 @@ arch: AlexNet
 # ===== Dataset ===== #
 data: /data/sanchez/benchmarks/yifany/
 set: ImageNet
-name: default
+name: Default
 
 # ===== Learning Rate Policy ======== #
 optimizer: sgd
