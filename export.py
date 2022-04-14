@@ -56,8 +56,8 @@ def main():
         if isinstance(m, STRConv):
             #print(n, m, m.getSparseWeight().shape)
             saveTensor(args, n, 'weight', m.getSparseWeight())
-            handle1 = m.register_forward_hook(get_activation(args, n, 'in'))
-            handle2 = m.register_forward_hook(get_activation(args, n, 'out'))
+            handle1 = m.register_forward_hook(get_activation(args, n, 'in', in_activation, out_activation))
+            handle2 = m.register_forward_hook(get_activation(args, n, 'out', in_activation, out_activation))
             #print(m.getSparseWeight())
             hooks.append(handle1)
             hooks.append(handle2)
@@ -93,7 +93,7 @@ def main():
                 assert torch.equal(m(in_activation[n]), out_activation[n])
 
 
-def get_activation(args, name, mode):
+def get_activation(args, name, mode, in_activation, out_activation):
     def in_hook(model, input, output):
         in_activation[name] = input[0].detach()
         saveTensor(args, name, mode, input[0].detach())

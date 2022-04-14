@@ -55,8 +55,8 @@ def main():
         if isinstance(m, nn.Conv2d):
             #print(n, m, m.weight.shape)
             saveTensor(args, n, 'weight', sparseFunction(m.weight, torch.tensor([-100]))) # alexnet have bias, ignore it for now
-            handle1 = m.register_forward_hook(get_activation(args, n, 'in'))
-            handle2 = m.register_forward_hook(get_activation(args, n, 'out'))
+            handle1 = m.register_forward_hook(get_activation(args, n, 'in', in_activation, out_activation))
+            handle2 = m.register_forward_hook(get_activation(args, n, 'out', in_activation, out_activation))
             #print(m.getSparseWeight())
             hooks.append(handle1)
             hooks.append(handle2)
@@ -95,6 +95,9 @@ def main():
 def get_model(args):
     if args.arch == "AlexNet":
         model = models.alexnet(pretrained=True)
+        assert False # somehow the export check fails for alexnet
+    elif args.arch == "VGG16_BN":
+        model = models.vgg16_bn(pretrained=True)
 
     return model
 
