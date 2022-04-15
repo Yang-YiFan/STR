@@ -130,16 +130,24 @@ def saveTensor(args, name, mode, data):
 
         fp.write("\n".join(content))
 
-    with (save_dir / "{}.tns".format(name)).open('w') as fp:
+    open(save_dir / "{}.tns".format(name), 'w').close()
+
+    with (save_dir / "{}.tns".format(name)).open('a') as fp:
         content = []
 
         data = data.to_sparse()
-        indices = data.indices().T.tolist()
         for idx in range(data.values().size()[0]): # store coordinates first, then values
-            coordinates = indices[idx]
+            if idx % 1000000 == 0:
+                fp.write("\n".join(content))
+                fp.flush()
+                print(len(content))
+                content = []
+            coordinates = data.indices().T[idx]
             content.append(" ".join([str(x+1) for x in coordinates]) + " " + str(data.values()[idx].item())) # coordinates start at 1
 
-        fp.write("\n".join(content))
+        if len(content) > 0:
+            fp.write("\n".join(content))
+        #fp.write("\n".join(content))
 
 def saveBn(args, name, data): # data = [weight, bias, running_mean, running_var, eps]
 
