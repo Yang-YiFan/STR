@@ -39,20 +39,20 @@ def main():
         torch.cuda.manual_seed_all(args.seed)
 
     # create model
-    sparsity, model = get_model(args)
+    filter, sparsity, model = get_model(args)
 
     data = get_dataset(args)
 
     # export BN
     for n, m in model.named_modules():
-        if isinstance(m, nn.BatchNorm2d):
+        if isinstance(m, nn.BatchNorm2d) and n.startswith(filter):
             print(n, m)
             saveBn(args, n, [m.weight.tolist(), m.bias.tolist(), m.running_mean.tolist(), m.running_var.tolist(), m.eps])
 
     hooks = []
     count = 0
     for n, m in model.named_modules():
-        if isinstance(m, nn.Conv2d):
+        if isinstance(m, nn.Conv2d) and n.startswith(filter):
             #print(n, m, m.weight.shape)
             prune.l1_unstructured(m, name="weight", amount=sparsity[count])
             saveTensor(args, n, 'weight', m.weight) # alexnet have bias, ignore it for now
@@ -92,22 +92,29 @@ def main():
     # check correctness
     with torch.no_grad():
         for n, m in model.named_modules():
-            if isinstance(m, nn.Conv2d):
+            if isinstance(m, nn.Conv2d) and n.startswith(filter):
                 print("checking", n)
                 assert torch.equal(m(in_activation[n]), out_activation[n])
 
 
 def get_model(args):
     if args.arch == "AlexNet":
+        filter=""
         sparsity = []
         model = models.alexnet(pretrained=True)
         assert False # somehow the export check fails for alexnet
     elif args.arch == "VGG16_BN":
+        filter=""
         # table 3 of SparTen paper
         sparsity = [0.42, 0.79, 0.66, 0.64, 0.47, 0.76, 0.58, 0.68, 0.73, 0.66, 0.68, 0.71, 0.64]
         model = models.vgg16_bn(pretrained=True)
+    elif args.arch == "GoogLeNet":
+        filter="inception3a" # only do inception 3a
+        # table 3 of SparTen paper
+        sparsity = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        model = models.googlenet(pretrained=True)
 
-    return sparsity, model
+    return filter, sparsity, model
 
 
 if __name__ == "__main__":
