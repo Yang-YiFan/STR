@@ -136,18 +136,27 @@ def saveTensor(args, name, mode, data):
         content = []
 
         data = data.to_sparse()
-        for idx in range(data.values().size()[0]): # store coordinates first, then values
-            if idx % 1000000 == 0:
+        crd = data.indices().T
+        val = data.values()
+        batch = 10000
+        size = data.values().size()[0]
+        for idx in range(size): # store coordinates first, then values
+            if idx % batch == 0:
                 fp.write("\n".join(content))
                 fp.flush()
-                print(len(content))
-                content = []
-            coordinates = data.indices().T[idx]
-            content.append(" ".join([str(x+1) for x in coordinates]) + " " + str(data.values()[idx].item())) # coordinates start at 1
+                if idx == 0:
+                    content = []
+                else:
+                    content = [""]
+                begin = idx
+                end = min(idx + batch, size)
+                local_crd = crd[begin:end].tolist() # sw caching
+                local_val = val[begin:end].tolist() # sw caching
+
+            content.append(" ".join([str(x+1) for x in local_crd[idx % batch]]) + " " + str(local_val[idx % batch])) # coordinates start at 1
 
         if len(content) > 0:
             fp.write("\n".join(content))
-        #fp.write("\n".join(content))
 
 def saveBn(args, name, data): # data = [weight, bias, running_mean, running_var, eps]
 
