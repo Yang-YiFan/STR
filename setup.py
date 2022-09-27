@@ -10,7 +10,7 @@ def EnsureDirExists(dir):
 # for ResNet
 
 def processResNetLayers(layers):
-    tmp = [filename[:-4] for filename in layers if filename.startswith('layer') and filename.endswith('.tns')]
+    tmp = [filename[:-4] for filename in layers if filename.endswith('.tns')]
     a = []
     for layer in tmp:
         if "downsample" not in layer:
@@ -95,13 +95,14 @@ def linktensor(network):
         srcTensor = func[2](layer, benchmark_dir)
         os.system("ln -s %s %s" % (srcTensor, tensor))
 
-#linktensor("ResNet50STR_98.98")
-#linktensor("ResNet50STR_98.05")
-#linktensor("ResNet50STR_96.11")
-#linktensor("ResNet50STR_95.15")
-#linktensor("ResNet50STR_90.23")
-#linktensor("ResNet50STR_81.27")
+linktensor("ResNet50STR_98.98")
+linktensor("ResNet50STR_98.05")
+linktensor("ResNet50STR_96.11")
+linktensor("ResNet50STR_95.15")
+linktensor("ResNet50STR_90.23")
+linktensor("ResNet50STR_81.27")
 
 #linktensor("VGG16_BNDefault")
+#linktensor("VGG16_BN_90")
 
-linktensor("GoogLeNetDefault")
+#linktensor("GoogLeNetDefault")
