@@ -60,7 +60,14 @@ def getVGGSrcBN(layer, benchmark_dir):
 def getGoogLeNetSrcBN(layer, benchmark_dir):
     newLayer = layer.replace('conv', 'bn')
     srcTensor = joinpath(joinpath(benchmark_dir, 'bn'), newLayer + ".txt")
-    return srcTensor 
+    return srcTensor
+
+# for MobileNetV1
+
+def getMobileNetV1SrcBN(layer, benchmark_dir):
+    newLayer = layer[:-1] + str(int(layer[-1])+1)
+    srcTensor = joinpath(joinpath(benchmark_dir, 'bn'), newLayer + ".txt")
+    return srcTensor
 
 def linktensor(network):
 
@@ -70,6 +77,10 @@ def linktensor(network):
         func = [processVGGLayers, getVGGSrcTensor, getVGGSrcBN]
     elif network.startswith("GoogLeNet"):
         func = [processVGGLayers, getVGGSrcTensor, getGoogLeNetSrcBN]
+    elif network.startswith("MobileNetV1"):
+        func = [processVGGLayers, getVGGSrcTensor, getMobileNetV1SrcBN]
+    else:
+        assert False, "unsupported network!"
 
     #benchmark_dir = "/data/sanchez/benchmarks/yifany/sconv/inputs/ResNet50STR_98.98"
     benchmark_dir = "/data/scratch/yifany/sconv/inputs/%s" % (network)
@@ -95,14 +106,17 @@ def linktensor(network):
         srcTensor = func[2](layer, benchmark_dir)
         os.system("ln -s %s %s" % (srcTensor, tensor))
 
-linktensor("ResNet50STR_98.98")
-linktensor("ResNet50STR_98.05")
-linktensor("ResNet50STR_96.11")
-linktensor("ResNet50STR_95.15")
-linktensor("ResNet50STR_90.23")
-linktensor("ResNet50STR_81.27")
+#linktensor("ResNet50STR_98.98")
+#linktensor("ResNet50STR_98.05")
+#linktensor("ResNet50STR_96.11")
+#linktensor("ResNet50STR_95.15")
+#linktensor("ResNet50STR_90.23")
+#linktensor("ResNet50STR_81.27")
 
 #linktensor("VGG16_BNDefault")
 #linktensor("VGG16_BN_90")
 
 #linktensor("GoogLeNetDefault")
+
+linktensor("MobileNetV1STR_89.01")
+linktensor("MobileNetV1STR_75.28")
