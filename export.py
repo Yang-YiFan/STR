@@ -45,6 +45,11 @@ def main():
 
     data = get_dataset(args)
 
+    for n, m in model.named_modules():
+        if isinstance(m, STRConv):
+            first_layer = n
+            break
+
     # export BN
     for n, m in model.named_modules():
         if isinstance(m, nn.BatchNorm2d):
@@ -80,7 +85,7 @@ def main():
             # compute output
             output = model(images)
 
-            assert torch.equal(in_activation['conv1'], images)
+            assert torch.equal(in_activation[first_layer], images)
 
     # remove all hooks
     for hook in hooks:

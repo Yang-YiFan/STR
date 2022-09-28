@@ -3,9 +3,9 @@
 arch: MobileNetV1
 
 # ===== Dataset ===== #
-data: /mnt/data/
+data: /data/sanchez/benchmarks/yifany/
 set: ImageNet
-name: MobileNetV1_89.01
+name: STR_89.01
 
 # ===== Learning Rate Policy ======== #
 optimizer: sgd
