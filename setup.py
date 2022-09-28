@@ -65,7 +65,8 @@ def getGoogLeNetSrcBN(layer, benchmark_dir):
 # for MobileNetV1
 
 def getMobileNetV1SrcBN(layer, benchmark_dir):
-    newLayer = layer[:-1] + str(int(layer[-1])+1)
+    newLayer = layer
+    if layer[-1].isnumeric(): newLayer = layer[:-1] + str(int(layer[-1])+1)
     srcTensor = joinpath(joinpath(benchmark_dir, 'bn'), newLayer + ".txt")
     return srcTensor
 
