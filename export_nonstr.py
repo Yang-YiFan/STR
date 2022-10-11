@@ -106,12 +106,13 @@ def get_model(args):
     elif args.arch == "VGG16_BN":
         filter=""
         # table 3 of SparTen paper
-        sparsity = [0.42, 0.79, 0.66, 0.64, 0.47, 0.76, 0.58, 0.68, 0.73, 0.66, 0.68, 0.71, 0.64]
+        sparsity = [0.42, 0.79, 0.66, 0.64, 0.47, 0.76, 0.58, 0.68, 0.73, 0.66, 0.68, 0.71, 0.64] # for vgg_default
+        #sparsity = [0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9] # for vgg_90
         model = models.vgg16_bn(pretrained=True)
     elif args.arch == "GoogLeNet":
         filter="inception3a" # only do inception 3a
         # table 3 of SparTen paper
-        sparsity = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        sparsity = [0.62, 0.59, 0.57, 0.65, 0.67, 0.53]
         model = models.googlenet(pretrained=True)
 
     return filter, sparsity, model
