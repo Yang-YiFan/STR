@@ -52,12 +52,25 @@ def main():
     hooks = []
     count = 0
     for n, m in model.named_modules():
+        # export conv
         if isinstance(m, nn.Conv2d) and n.startswith(filter):
             #print(n, m, m.weight.shape)
             prune.l1_unstructured(m, name="weight", amount=sparsity[count])
             saveTensor(args, n, 'weight', m.weight) # alexnet have bias, ignore it for now
             handle1 = m.register_forward_hook(get_activation(args, n, 'in', in_activation, out_activation))
             handle2 = m.register_forward_hook(get_activation(args, n, 'out', in_activation, out_activation))
+            #print(m.getSparseWeight())
+            hooks.append(handle1)
+            hooks.append(handle2)
+            count += 1
+
+        # export fc
+        if isinstance(m, nn.Linear) and n.startswith(filter):
+            #print(n, m, m.weight.shape)
+            prune.l1_unstructured(m, name="weight", amount=sparsity[count])
+            saveTensor(args, n, 'weight', m.weight, True) # alexnet have bias, ignore it for now
+            handle1 = m.register_forward_hook(get_activation(args, n, 'in', in_activation, out_activation, True))
+            handle2 = m.register_forward_hook(get_activation(args, n, 'out', in_activation, out_activation, True))
             #print(m.getSparseWeight())
             hooks.append(handle1)
             hooks.append(handle2)
@@ -105,9 +118,10 @@ def get_model(args):
         assert False # somehow the export check fails for alexnet
     elif args.arch == "VGG16_BN":
         filter=""
-        # table 3 of SparTen paper
-        sparsity = [0.42, 0.79, 0.66, 0.64, 0.47, 0.76, 0.58, 0.68, 0.73, 0.66, 0.68, 0.71, 0.64] # for vgg_default
-        #sparsity = [0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9] # for vgg_90
+        # conv sparsity: table 3 of SparTen paper
+        # fc sparsity: VGG-16 ImageNet Conservative Sparse (vgg_default) and VGG-16 ImageNet Moderate Sparse (vgg_90) in sparsezoo
+        sparsity = [0.42, 0.79, 0.66, 0.64, 0.47, 0.76, 0.58, 0.68, 0.73, 0.66, 0.68, 0.71, 0.64, 0.75, 0.75, 0.75] # for vgg_default
+        #sparsity = [0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.9, 0.92, 0.92, 0.92] # for vgg_90
         model = models.vgg16_bn(pretrained=True)
     elif args.arch == "GoogLeNet":
         filter="inception3a" # only do inception 3a

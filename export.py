@@ -98,13 +98,13 @@ def main():
                 assert torch.equal(m(in_activation[n]), out_activation[n])
 
 
-def get_activation(args, name, mode, in_activation, out_activation):
+def get_activation(args, name, mode, in_activation, out_activation, unsqueeze=False):
     def in_hook(model, input, output):
         in_activation[name] = input[0].detach()
-        saveTensor(args, name, mode, input[0].detach())
+        saveTensor(args, name, mode, input[0].detach(), unsqueeze)
     def out_hook(model, input, output):
         out_activation[name] = output.detach()
-        saveTensor(args, name, mode, output.detach())
+        saveTensor(args, name, mode, output.detach(), unsqueeze)
     if mode == 'in':
         return in_hook
     elif mode == 'out':
@@ -112,8 +112,11 @@ def get_activation(args, name, mode, in_activation, out_activation):
     else:
         assert False
 
-def saveTensor(args, name, mode, data):
+def saveTensor(args, name, mode, data, unsqueeze=False):
     assert mode in ['weight', 'in', 'out']
+    # for FC make the tensor shape like 1x1 conv
+    if unsqueeze:
+        data = torch.unsqueeze(torch.unsqueeze(data, -1), -1)
     print("saving", name, mode, data.shape)
 
     #save_dir = pathlib.Path(f"/data/sanchez/benchmarks/yifany/sconv/inputs/{args.arch+args.name}/{mode}")
