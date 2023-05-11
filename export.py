@@ -16,6 +16,7 @@ import torch.utils.data
 import torch.utils.data.distributed
 
 from utils.conv_type import STRConv
+from models.resnet import MyAdd
 
 from args import args
 
@@ -57,10 +58,11 @@ def main():
             saveBn(args, n, [m.weight.tolist(), m.bias.tolist(), m.running_mean.tolist(), m.running_var.tolist(), m.eps])
 
     hooks = []
+    # export conv and FC
     for n, m in model.named_modules():
-        if isinstance(m, STRConv):
+        if isinstance(m, STRConv) or isinstance(m, MyAdd):
             #print(n, m, m.getSparseWeight().shape)
-            saveTensor(args, n, 'weight', m.getSparseWeight())
+            if isinstance(m, STRConv): saveTensor(args, n, 'weight', m.getSparseWeight())
             handle1 = m.register_forward_hook(get_activation(args, n, 'in', in_activation, out_activation))
             handle2 = m.register_forward_hook(get_activation(args, n, 'out', in_activation, out_activation))
             #print(m.getSparseWeight())
@@ -100,8 +102,13 @@ def main():
 
 def get_activation(args, name, mode, in_activation, out_activation, unsqueeze=False):
     def in_hook(model, input, output):
-        in_activation[name] = input[0].detach()
-        saveTensor(args, name, mode, input[0].detach(), unsqueeze)
+        if len(input) == 1: # if only 1 input, handle separately for legacy reasons
+            in_activation[name] = input[0].detach()
+            saveTensor(args, name, mode, input[0].detach(), unsqueeze)
+        else:
+            for i in range(len(input)):
+                in_activation[name+"."+str(i)] = input[i].detach()
+                saveTensor(args, name+"."+str(i), mode, input[i].detach(), unsqueeze)
     def out_hook(model, input, output):
         out_activation[name] = output.detach()
         saveTensor(args, name, mode, output.detach(), unsqueeze)

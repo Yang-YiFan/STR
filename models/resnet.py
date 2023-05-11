@@ -1,7 +1,16 @@
+import torch
 import torch.nn as nn
 
 from utils.builder import get_builder
 from args import args
+
+# use custom add so that we can trace it
+class MyAdd(nn.Module):
+    def __init__(self):
+        super(MyAdd, self).__init__()
+
+    def forward(self, x, y):
+        return x + y
 
 # BasicBlock {{{
 class BasicBlock(nn.Module):
@@ -17,6 +26,7 @@ class BasicBlock(nn.Module):
         self.bn2 = builder.batchnorm(planes, last_bn=True)
         self.downsample = downsample
         self.stride = stride
+        self.add = MyAdd()
 
     def forward(self, x):
         residual = x
@@ -35,7 +45,8 @@ class BasicBlock(nn.Module):
         if self.downsample is not None:
             residual = self.downsample(x)
 
-        out += residual
+        #out += residual
+        out = self.add(out, residual)
         out = self.relu(out)
 
         return out
@@ -77,7 +88,8 @@ class Bottleneck(nn.Module):
         if self.downsample is not None:
             residual = self.downsample(x)
 
-        out += residual
+        #out += residual
+        out = self.add(out, residual)
 
         out = self.relu(out)
 
