@@ -26,7 +26,10 @@ def getResNetSrcTensor(layer, benchmark_dir, mode, suffix, isUnary):
     if isUnary:
         srcTensor = joinpath(joinpath(benchmark_dir, mode), f"{layer}.tns")
     else:
-        srcTensor = joinpath(joinpath(benchmark_dir, mode), f"{layer}.{suffix}.tns")
+        if suffix == "":
+            srcTensor = joinpath(joinpath(benchmark_dir, mode), f"{layer}.tns")
+        else:
+            srcTensor = joinpath(joinpath(benchmark_dir, mode), f"{layer}.{suffix}.tns")
     return srcTensor
 
 def getResNetSrcBN(layer, benchmark_dir):
@@ -35,7 +38,7 @@ def getResNetSrcBN(layer, benchmark_dir):
         srcTensor = joinpath(joinpath(benchmark_dir, 'bn'), f"{newLayer}.txt")
     elif "add" in layer:
         # don't have bn for add, put a random name
-        srcTensor = joinpath(joinpath(benchmark_dir, 'bn'), f"{newLayer}.txt")
+        srcTensor = joinpath(joinpath(benchmark_dir, 'bn'), f"{layer}.txt")
     else:
         newLayer = layer.replace('conv', 'bn')
         srcTensor = joinpath(joinpath(benchmark_dir, 'bn'), f"{newLayer}.txt")
@@ -103,7 +106,7 @@ def linktensor(network):
 
     # handle unary first
     for i, layer in enumerate(unaryLayers):
-        EnsureDirExists(joinpath(path, layer))
+        EnsureDirExists(joinpath(path, layer.replace(".", "_")))
         for mode, suffix in [('in', '0'), ('weight', ''), ('out', '')]:
             tensor = joinpath(joinpath(path, layer.replace(".", "_")), f'{mode}{suffix}.tns')
             srcTensor = func[1](layer, benchmark_dir, mode, suffix, True)
@@ -115,8 +118,8 @@ def linktensor(network):
 
     # handle binary next
     for i, layer in enumerate(binaryLayers):
-        EnsureDirExists(joinpath(path, layer))
-        for mode, suffix in [('in', '0'), ('in', '0'), ('out', '')]:
+        EnsureDirExists(joinpath(path, layer.replace(".", "_")))
+        for mode, suffix in [('in', '0'), ('in', '1'), ('out', '')]:
             tensor = joinpath(joinpath(path, layer.replace(".", "_")), f'{mode}{suffix}.tns')
             srcTensor = func[1](layer, benchmark_dir, mode, suffix, False)
             os.system(f"ln -s {srcTensor} {tensor}")
@@ -125,7 +128,7 @@ def linktensor(network):
         srcTensor = func[2](layer, benchmark_dir)
         os.system(f"ln -s {srcTensor} {tensor}")
 
-#linktensor("ResNet50STR_98.98")
+linktensor("ResNet50STR_98.98")
 #linktensor("ResNet50STR_98.05")
 #linktensor("ResNet50STR_96.11")
 #linktensor("ResNet50STR_95.15")
@@ -137,5 +140,5 @@ def linktensor(network):
 
 #linktensor("GoogLeNetDefault")
 
-linktensor("MobileNetV1STR_89.01")
-linktensor("MobileNetV1STR_75.28")
+#linktensor("MobileNetV1STR_89.01")
+#linktensor("MobileNetV1STR_75.28")
