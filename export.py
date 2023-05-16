@@ -96,7 +96,7 @@ def main():
     # check correctness
     with torch.no_grad():
         for n, m in model.named_modules():
-            if isinstance(m, STRConv):
+            if isinstance(m, STRConv) and n in in_activation.keys() and n in out_activation.keys():
                 assert torch.equal(m(in_activation[n]), out_activation[n])
 
 

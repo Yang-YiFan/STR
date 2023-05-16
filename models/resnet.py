@@ -70,6 +70,7 @@ class Bottleneck(nn.Module):
         self.relu = builder.activation()
         self.downsample = downsample
         self.stride = stride
+        self.add = MyAdd()
 
     def forward(self, x):
         residual = x
