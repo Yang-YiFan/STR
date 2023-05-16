@@ -11,29 +11,34 @@ def EnsureDirExists(dir):
 
 def processResNetLayers(layers):
     tmp = [filename[:-4] for filename in layers if filename.endswith('.tns')]
-    a = []
+    unaryLayers = []
+    binaryLayers = []
     for layer in tmp:
-        if "downsample" not in layer:
-            a.append(layer)
+        if "add" in layer:
+            binaryLayers.append(layer)
         else:
-            a.append(layer[:-2])
-    tmp = a
-    tmp.sort()
-    return tmp
+            unaryLayers.append(layer)
+    unaryLayers.sort()
+    binaryLayers.sort()
+    return unaryLayers, binaryLayers
 
-def getResNetSrcTensor(layer, benchmark_dir, mode):
-    if "downsample" not in layer:
-        srcTensor = joinpath(joinpath(benchmark_dir, mode), layer+".tns")
+def getResNetSrcTensor(layer, benchmark_dir, mode, suffix, isUnary):
+    if isUnary:
+        srcTensor = joinpath(joinpath(benchmark_dir, mode), f"{layer}.tns")
     else:
-        srcTensor = joinpath(joinpath(benchmark_dir, mode), layer+".0.tns")
+        srcTensor = joinpath(joinpath(benchmark_dir, mode), f"{layer}.{suffix}.tns")
     return srcTensor
 
 def getResNetSrcBN(layer, benchmark_dir):
-    if "downsample" not in layer:
-        newLayer = layer.replace('conv', 'bn')
-        srcTensor = joinpath(joinpath(benchmark_dir, 'bn'), newLayer + ".txt")
+    if "downsample" in layer:
+        newLayer = layer[:-1] + "1"
+        srcTensor = joinpath(joinpath(benchmark_dir, 'bn'), f"{newLayer}.txt")
+    elif "add" in layer:
+        # don't have bn for add, put a random name
+        srcTensor = joinpath(joinpath(benchmark_dir, 'bn'), f"{newLayer}.txt")
     else:
-        srcTensor = joinpath(joinpath(benchmark_dir, 'bn'), layer + ".1.txt")
+        newLayer = layer.replace('conv', 'bn')
+        srcTensor = joinpath(joinpath(benchmark_dir, 'bn'), f"{newLayer}.txt")
     return srcTensor
 
 # for VGG
@@ -41,10 +46,10 @@ def getResNetSrcBN(layer, benchmark_dir):
 def processVGGLayers(layers):
     tmp = [filename[:-4] for filename in layers if filename.endswith('.tns')]
     tmp.sort()
-    return tmp
+    return tmp, []
 
-def getVGGSrcTensor(layer, benchmark_dir, mode):
-    srcTensor = joinpath(joinpath(benchmark_dir, mode), layer+".tns")
+def getVGGSrcTensor(layer, benchmark_dir, mode, suffix, isUnary):
+    srcTensor = joinpath(joinpath(benchmark_dir, mode), f"{layer}.tns")
     return srcTensor
 
 def getVGGSrcBN(layer, benchmark_dir):
@@ -52,14 +57,14 @@ def getVGGSrcBN(layer, benchmark_dir):
     layerid = int(layer.split(".")[-1])
     layername.append(str(layerid+1))
     newLayer = ".".join(layername)
-    srcTensor = joinpath(joinpath(benchmark_dir, 'bn'), newLayer + ".txt")
+    srcTensor = joinpath(joinpath(benchmark_dir, 'bn'), f"{newLayer}.txt")
     return srcTensor
 
 # for GoogLeNet
 
 def getGoogLeNetSrcBN(layer, benchmark_dir):
     newLayer = layer.replace('conv', 'bn')
-    srcTensor = joinpath(joinpath(benchmark_dir, 'bn'), newLayer + ".txt")
+    srcTensor = joinpath(joinpath(benchmark_dir, 'bn'), f"{newLayer}.txt")
     return srcTensor
 
 # for MobileNetV1
@@ -67,7 +72,7 @@ def getGoogLeNetSrcBN(layer, benchmark_dir):
 def getMobileNetV1SrcBN(layer, benchmark_dir):
     newLayer = layer
     if layer[-1].isnumeric(): newLayer = layer[:-1] + str(int(layer[-1])+1)
-    srcTensor = joinpath(joinpath(benchmark_dir, 'bn'), newLayer + ".txt")
+    srcTensor = joinpath(joinpath(benchmark_dir, 'bn'), f"{newLayer}.txt")
     return srcTensor
 
 def linktensor(network):
@@ -84,28 +89,41 @@ def linktensor(network):
         assert False, "unsupported network!"
 
     #benchmark_dir = "/data/sanchez/benchmarks/yifany/sconv/inputs/ResNet50STR_98.98"
-    benchmark_dir = "/data/scratch/yifany/sconv/inputs/%s" % (network)
+    benchmark_dir = f"/data/scratch/yifany/sconv/inputs/{network}"
 
     layers = []
 
-    for (_, _, filenames) in os.walk(os.path.join(benchmark_dir, "weight")):
+    for (_, _, filenames) in os.walk(os.path.join(benchmark_dir, "out")):
         layers.extend(filenames)
 
-    layers = func[0](layers)
+    unaryLayers, binaryLayers = func[0](layers)
 
-    path = "/data/sanchez/users/yifany/merge_tensor_prj/taco_apps/input/%s" % (network)
+    path = f"/data/sanchez/users/yifany/merge_tensor_prj/taco_apps/input/{network}"
     EnsureDirExists(path)
 
-    for i, layer in enumerate(layers):
+    # handle unary first
+    for i, layer in enumerate(unaryLayers):
         EnsureDirExists(joinpath(path, layer))
-        for mode in ['in', 'weight', 'out']:
-            tensor = joinpath(joinpath(path, layer), mode + '.tns')
-            srcTensor = func[1](layer, benchmark_dir, mode)
-            os.system("ln -s %s %s" % (srcTensor, tensor))
+        for mode, suffix in [('in', '0'), ('weight', ''), ('out', '')]:
+            tensor = joinpath(joinpath(path, layer.replace(".", "_")), f'{mode}{suffix}.tns')
+            srcTensor = func[1](layer, benchmark_dir, mode, suffix, True)
+            os.system(f"ln -s {srcTensor} {tensor}")
         # now link bn
-        tensor = joinpath(joinpath(path, layer), 'bn.txt')
+        tensor = joinpath(joinpath(path, layer.replace(".", "_")), 'bn.txt')
         srcTensor = func[2](layer, benchmark_dir)
-        os.system("ln -s %s %s" % (srcTensor, tensor))
+        os.system(f"ln -s {srcTensor} {tensor}")
+
+    # handle binary next
+    for i, layer in enumerate(binaryLayers):
+        EnsureDirExists(joinpath(path, layer))
+        for mode, suffix in [('in', '0'), ('in', '0'), ('out', '')]:
+            tensor = joinpath(joinpath(path, layer.replace(".", "_")), f'{mode}{suffix}.tns')
+            srcTensor = func[1](layer, benchmark_dir, mode, suffix, False)
+            os.system(f"ln -s {srcTensor} {tensor}")
+        # now link bn
+        tensor = joinpath(joinpath(path, layer.replace(".", "_")), 'bn.txt')
+        srcTensor = func[2](layer, benchmark_dir)
+        os.system(f"ln -s {srcTensor} {tensor}")
 
 #linktensor("ResNet50STR_98.98")
 #linktensor("ResNet50STR_98.05")
