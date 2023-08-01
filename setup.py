@@ -78,6 +78,21 @@ def getMobileNetV1SrcBN(layer, benchmark_dir):
     srcTensor = joinpath(joinpath(benchmark_dir, 'bn'), f"{newLayer}.txt")
     return srcTensor
 
+# for bert
+
+def processBertLayers(layers):
+    tmp = [filename[:-4] for filename in layers if filename.endswith('.tns')]
+    unaryLayers = []
+    binaryLayers = []
+    for layer in tmp:
+        if "add" in layer or "matmul" in layer:
+            binaryLayers.append(layer)
+        else:
+            unaryLayers.append(layer)
+    unaryLayers.sort()
+    binaryLayers.sort()
+    return unaryLayers, binaryLayers
+
 def linktensor(network):
 
     if network.startswith("ResNet"):
@@ -88,6 +103,8 @@ def linktensor(network):
         func = [processVGGLayers, getVGGSrcTensor, getGoogLeNetSrcBN]
     elif network.startswith("MobileNetV1"):
         func = [processVGGLayers, getVGGSrcTensor, getMobileNetV1SrcBN]
+    elif network.startswith("bert"):
+        func = [processBertLayers, getResNetSrcTensor, None]
     else:
         assert False, "unsupported network!"
 
@@ -112,9 +129,10 @@ def linktensor(network):
             srcTensor = func[1](layer, benchmark_dir, mode, suffix, True)
             os.system(f"ln -s {srcTensor} {tensor}")
         # now link bn
-        tensor = joinpath(joinpath(path, layer.replace(".", "_")), 'bn.txt')
-        srcTensor = func[2](layer, benchmark_dir)
-        os.system(f"ln -s {srcTensor} {tensor}")
+        if func[2] is not None:
+            tensor = joinpath(joinpath(path, layer.replace(".", "_")), 'bn.txt')
+            srcTensor = func[2](layer, benchmark_dir)
+            os.system(f"ln -s {srcTensor} {tensor}")
 
     # handle binary next
     for i, layer in enumerate(binaryLayers):
@@ -124,11 +142,12 @@ def linktensor(network):
             srcTensor = func[1](layer, benchmark_dir, mode, suffix, False)
             os.system(f"ln -s {srcTensor} {tensor}")
         # now link bn
-        tensor = joinpath(joinpath(path, layer.replace(".", "_")), 'bn.txt')
-        srcTensor = func[2](layer, benchmark_dir)
-        os.system(f"ln -s {srcTensor} {tensor}")
+        if func[2] is not None:
+            tensor = joinpath(joinpath(path, layer.replace(".", "_")), 'bn.txt')
+            srcTensor = func[2](layer, benchmark_dir)
+            os.system(f"ln -s {srcTensor} {tensor}")
 
-linktensor("ResNet50STR_98.98")
+#linktensor("ResNet50STR_98.98")
 #linktensor("ResNet50STR_98.05")
 #linktensor("ResNet50STR_96.11")
 #linktensor("ResNet50STR_95.15")
@@ -142,3 +161,5 @@ linktensor("ResNet50STR_98.98")
 
 #linktensor("MobileNetV1STR_89.01")
 #linktensor("MobileNetV1STR_75.28")
+
+linktensor("bert-base-uncased-squad")
