@@ -141,7 +141,7 @@ def saveTensor(args, name, mode, data, unsqueeze=False):
         content.append("# nnz " + str(data.to_sparse().values().size()[0]) + " sparsity ratio " + str(1.0 - data.to_sparse().values().size()[0] / data.reshape(-1).size()[0]))
 
         sizes = list(data.shape)
-        content.append("# uncompressed shape "+" ".join([str(x) for x in sizes]))
+        content.append(f"# ndim {len(sizes)} uncompressed shape "+" ".join([str(x) for x in sizes]))
 
         fp.write("\n".join(content))
 
