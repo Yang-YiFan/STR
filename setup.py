@@ -93,6 +93,16 @@ def processBertLayers(layers):
     binaryLayers.sort()
     return unaryLayers, binaryLayers
 
+def getBertSrcTensor(layer, benchmark_dir, mode, suffix, isUnary):
+    if mode == "weight":
+        suffix = "w"
+    if suffix == "":
+        srcTensor = joinpath(joinpath(benchmark_dir, mode), f"{layer}.tns")
+    else:
+        srcTensor = joinpath(joinpath(benchmark_dir, mode), f"{layer}.{suffix}.tns")
+    return srcTensor
+
+
 def linktensor(network):
 
     if network.startswith("ResNet"):
@@ -104,7 +114,7 @@ def linktensor(network):
     elif network.startswith("MobileNetV1"):
         func = [processVGGLayers, getVGGSrcTensor, getMobileNetV1SrcBN]
     elif network.startswith("bert"):
-        func = [processBertLayers, getResNetSrcTensor, None]
+        func = [processBertLayers, getBertSrcTensor, None]
     else:
         assert False, "unsupported network!"
 
