@@ -172,4 +172,5 @@ def linktensor(network):
 #linktensor("MobileNetV1STR_89.01")
 #linktensor("MobileNetV1STR_75.28")
 
-linktensor("bert-base-uncased-squad")
+linktensor("bert_base_uncased_squad")
+linktensor("bert_large_uncased_bookcorpus")
