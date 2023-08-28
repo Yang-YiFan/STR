@@ -94,12 +94,16 @@ def processBertLayers(layers):
     return unaryLayers, binaryLayers
 
 def getBertSrcTensor(layer, benchmark_dir, mode, suffix, isUnary):
+    modeName = mode
     if mode == "weight":
         suffix = "w"
+    elif mode == "bias":
+        suffix = "b"
+        modeName = "weight"
     if suffix == "":
-        srcTensor = joinpath(joinpath(benchmark_dir, mode), f"{layer}.tns")
+        srcTensor = joinpath(joinpath(benchmark_dir, modeName), f"{layer}.tns")
     else:
-        srcTensor = joinpath(joinpath(benchmark_dir, mode), f"{layer}.{suffix}.tns")
+        srcTensor = joinpath(joinpath(benchmark_dir, modeName), f"{layer}.{suffix}.tns")
     return srcTensor
 
 
@@ -134,7 +138,7 @@ def linktensor(network):
     # handle unary first
     for i, layer in enumerate(unaryLayers):
         EnsureDirExists(joinpath(path, layer.replace(".", "_")))
-        for mode, suffix in [('in', '0'), ('weight', ''), ('out', '')]:
+        for mode, suffix in [('in', '0'), ('weight', ''), ('bias', ''), ('out', '')]:
             tensor = joinpath(joinpath(path, layer.replace(".", "_")), f'{mode}{suffix}.tns')
             srcTensor = func[1](layer, benchmark_dir, mode, suffix, True)
             os.system(f"ln -s {srcTensor} {tensor}")
