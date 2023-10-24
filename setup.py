@@ -161,20 +161,21 @@ def linktensor(network):
             srcTensor = func[2](layer, benchmark_dir)
             os.system(f"ln -s {srcTensor} {tensor}")
 
-#linktensor("ResNet50STR_98.98")
-#linktensor("ResNet50STR_98.05")
-#linktensor("ResNet50STR_96.11")
-#linktensor("ResNet50STR_95.15")
-#linktensor("ResNet50STR_90.23")
-#linktensor("ResNet50STR_81.27")
+if __name__ == "__main__":
+    #linktensor("ResNet50STR_98.98")
+    #linktensor("ResNet50STR_98.05")
+    #linktensor("ResNet50STR_96.11")
+    #linktensor("ResNet50STR_95.15")
+    #linktensor("ResNet50STR_90.23")
+    #linktensor("ResNet50STR_81.27")
 
-#linktensor("VGG16_BNDefault")
-#linktensor("VGG16_BN_90")
+    #linktensor("VGG16_BNDefault")
+    #linktensor("VGG16_BN_90")
 
-#linktensor("GoogLeNetDefault")
+    #linktensor("GoogLeNetDefault")
 
-#linktensor("MobileNetV1STR_89.01")
-#linktensor("MobileNetV1STR_75.28")
+    #linktensor("MobileNetV1STR_89.01")
+    #linktensor("MobileNetV1STR_75.28")
 
-linktensor("bert_base_uncased_squad")
-linktensor("bert_large_uncased_bookcorpus")
+    linktensor("bert_base_uncased_squad")
+    linktensor("bert_large_uncased_bookcorpus")
