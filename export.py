@@ -6,6 +6,7 @@ import time
 import json
 import tqdm
 import math
+import numpy as np
 
 import torch
 import torch.nn as nn
@@ -18,16 +19,24 @@ import torch.utils.data.distributed
 from utils.conv_type import STRConv
 from models.resnet import MyAdd
 
+from setup import EnsureDirExists
+
 from args import args
 
 import data
 import models
 
 use_cuda = torch.cuda.is_available()
+# for native conv
 in_activation = {}
 out_activation = {}
+# for im2col
+in_activation_matrix = {}
+out_activation_matrix = {}
+weight_matrix = {}
 torch.set_num_threads(16)
 base_dir = f"/scratch/yifany/sconv/inputs/{args.arch+args.name}"
+matrix_dir = f"/scratch/yifany/spmspm/inputs/{args.arch+args.name}"
 
 def main():
     print(args)
@@ -57,17 +66,31 @@ def main():
             print(n, m)
             saveBn(args, n, [m.weight.tolist(), m.bias.tolist(), m.running_mean.tolist(), m.running_var.tolist(), m.eps])
 
+    for mode in ['weight', 'in', 'out']:
+        EnsureDirExists(os.path.join(matrix_dir, mode))
+
     hooks = []
     # export conv and FC
     for n, m in model.named_modules():
         if isinstance(m, STRConv) or isinstance(m, MyAdd):
             #print(n, m, m.getSparseWeight().shape)
-            if isinstance(m, STRConv): saveTensor(args, n, 'weight', m.getSparseWeight())
+            if isinstance(m, STRConv):
+                saveTensor(args, n, 'weight', m.getSparseWeight())
+                sparse_weight = m.getSparseWeight() # (K, C, R, S)
+                K = sparse_weight.shape[0]
+                sparse_weight = sparse_weight.view(K, -1) # (K, C*R*S)
+                sparse_weight = sparse_weight.permute(1, 0).contiguous() # (C*R*S, K)
+                weight_matrix[n] = sparse_weight
+                np.save(f"{matrix_dir}/weight/{n}.npy", sparse_weight.cpu().numpy())
             handle1 = m.register_forward_hook(get_activation(args, n, 'in', in_activation, out_activation))
             handle2 = m.register_forward_hook(get_activation(args, n, 'out', in_activation, out_activation))
+            handle3 = m.register_forward_hook(saveMatrix(args, n, 'in', in_activation_matrix, out_activation_matrix))
+            handle4 = m.register_forward_hook(saveMatrix(args, n, 'out', in_activation_matrix, out_activation_matrix))
             #print(m.getSparseWeight())
             hooks.append(handle1)
             hooks.append(handle2)
+            hooks.append(handle3)
+            hooks.append(handle4)
 
     # switch to evaluate mode
     model.eval()
@@ -87,7 +110,8 @@ def main():
             # compute output
             output = model(images)
 
-            assert torch.equal(in_activation[first_layer], images)
+            if first_layer in in_activation.keys():
+                assert torch.equal(in_activation[first_layer], images)
 
     # remove all hooks
     for hook in hooks:
@@ -98,6 +122,8 @@ def main():
         for n, m in model.named_modules():
             if isinstance(m, STRConv) and n in in_activation.keys() and n in out_activation.keys():
                 assert torch.equal(m(in_activation[n]), out_activation[n])
+            if isinstance(m, STRConv) and n in in_activation_matrix.keys() and n in out_activation_matrix.keys() and n in weight_matrix.keys():
+                assert torch.equal(torch.matmul(in_activation_matrix[n], weight_matrix[n]), out_activation_matrix[n])
 
 
 def get_activation(args, name, mode, in_activation, out_activation, unsqueeze=False):
@@ -112,6 +138,30 @@ def get_activation(args, name, mode, in_activation, out_activation, unsqueeze=Fa
     def out_hook(model, input, output):
         out_activation[name] = output.detach()
         saveTensor(args, name, mode, output.detach(), unsqueeze)
+    if mode == 'in':
+        return in_hook
+    elif mode == 'out':
+        return out_hook
+    else:
+        assert False
+
+def saveMatrix(args, name, mode, in_activation, out_activation):
+    def in_hook(model, input, output):
+        for i in range(len(input)):
+            tensor = input[i].detach() # (N, C, H, W)
+            if isinstance(model, STRConv):
+                assert(len(input) == 1)
+                tensor = nn.functional.unfold(tensor, model.kernel_size, padding=model.padding, stride=model.stride) # (N, C*R*S, H*W)
+                tensor = tensor.permute(0, 2, 1).contiguous() # (N, H*W, C*R*S)
+                in_activation[name] = tensor
+            np.save(f"{matrix_dir}/{mode}/{name}.npy", tensor[0].cpu().numpy()) # no batch dim
+    def out_hook(model, input, output):
+        tensor = output.detach() # (N, K, H, W)
+        if isinstance(model, STRConv):
+            tensor = tensor.view(tensor.shape[0], tensor.shape[1], -1) # (N, K, H*W)
+            tensor = tensor.permute(0, 2, 1).contiguous() # (N, H*W, K)
+            out_activation[name] = tensor
+        np.save(f"{matrix_dir}/{mode}/{name}.npy", tensor[0].cpu().numpy()) # no batch dim
     if mode == 'in':
         return in_hook
     elif mode == 'out':
