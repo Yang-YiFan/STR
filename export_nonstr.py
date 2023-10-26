@@ -77,8 +77,8 @@ def main():
 
             handle1 = m.register_forward_hook(get_activation(args, n, 'in', in_activation, out_activation))
             handle2 = m.register_forward_hook(get_activation(args, n, 'out', in_activation, out_activation))
-            handle3 = m.register_forward_hook(saveMatrix(args, n, 'in', in_activation_matrix, out_activation_matrix))
-            handle4 = m.register_forward_hook(saveMatrix(args, n, 'out', in_activation_matrix, out_activation_matrix))
+            handle3 = m.register_forward_hook(saveMatrix(args, n, 'in', in_activation_matrix, out_activation_matrix, nn.Conv2d))
+            handle4 = m.register_forward_hook(saveMatrix(args, n, 'out', in_activation_matrix, out_activation_matrix, nn.Conv2d))
             #print(m.getSparseWeight())
             hooks.append(handle1)
             hooks.append(handle2)
@@ -127,7 +127,7 @@ def main():
     # check correctness
     with torch.no_grad():
         for n, m in model.named_modules():
-            if isinstance(m, nn.Conv2d) and n.startswith(filter):
+            if isinstance(m, nn.Conv2d) and n.startswith(filter) and n in in_activation.keys() and n in out_activation.keys():
                 print("checking", n)
                 assert torch.equal(m(in_activation[n]), out_activation[n])
 

@@ -86,8 +86,8 @@ def main():
 
             handle1 = m.register_forward_hook(get_activation(args, n, 'in', in_activation, out_activation))
             handle2 = m.register_forward_hook(get_activation(args, n, 'out', in_activation, out_activation))
-            handle3 = m.register_forward_hook(saveMatrix(args, n, 'in', in_activation_matrix, out_activation_matrix))
-            handle4 = m.register_forward_hook(saveMatrix(args, n, 'out', in_activation_matrix, out_activation_matrix))
+            handle3 = m.register_forward_hook(saveMatrix(args, n, 'in', in_activation_matrix, out_activation_matrix, STRConv))
+            handle4 = m.register_forward_hook(saveMatrix(args, n, 'out', in_activation_matrix, out_activation_matrix, STRConv))
             #print(m.getSparseWeight())
             hooks.append(handle1)
             hooks.append(handle2)
@@ -148,11 +148,11 @@ def get_activation(args, name, mode, in_activation, out_activation, unsqueeze=Fa
     else:
         assert False
 
-def saveMatrix(args, name, mode, in_activation, out_activation):
+def saveMatrix(args, name, mode, in_activation, out_activation, convType):
     def in_hook(model, input, output):
         for i in range(len(input)):
             tensor = input[i].detach() # (N, C, H, W)
-            if isinstance(model, STRConv):
+            if isinstance(model, convType):
                 assert(len(input) == 1)
                 tensor = nn.functional.unfold(tensor, model.kernel_size, padding=model.padding, stride=model.stride) # (N, C*R*S, H*W)
                 tensor = tensor.permute(0, 2, 1).contiguous() # (N, H*W, C*R*S)
@@ -164,7 +164,7 @@ def saveMatrix(args, name, mode, in_activation, out_activation):
             np.save(f"{matrix_dir}/{mode}/{name}.npy", tensor[0].cpu().numpy()) # no batch dim
     def out_hook(model, input, output):
         tensor = output.detach() # (N, K, H, W)
-        if isinstance(model, STRConv):
+        if isinstance(model, convType):
             tensor = tensor.view(tensor.shape[0], tensor.shape[1], -1) # (N, K, H*W)
             tensor = tensor.permute(0, 2, 1).contiguous() # (N, H*W, K)
             out_activation[name] = tensor
