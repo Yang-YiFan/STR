@@ -6,6 +6,7 @@ import time
 import json
 import tqdm
 import math
+import numpy as np
 
 import torch
 import torch.nn as nn
@@ -21,13 +22,20 @@ import data
 import torchvision.models as models
 import torch.nn.utils.prune as prune
 
-from export import get_activation, saveTensor, saveBn, get_dataset
+from export import get_activation, saveTensor, saveBn, get_dataset, saveMatrix
+from setup import EnsureDirExists
 
 use_cuda = torch.cuda.is_available()
+# for native conv
 in_activation = {}
 out_activation = {}
+# for im2col
+in_activation_matrix = {}
+out_activation_matrix = {}
+weight_matrix = {}
 torch.set_num_threads(16)
 base_dir = f"/scratch/yifany/sconv/inputs/{args.arch+args.name}"
+matrix_dir = f"/scratch/yifany/spmspm/inputs/{args.arch+args.name}"
 
 def main():
     print(args)
@@ -49,6 +57,9 @@ def main():
             print(n, m)
             saveBn(args, n, [m.weight.tolist(), m.bias.tolist(), m.running_mean.tolist(), m.running_var.tolist(), m.eps])
 
+    for mode in ['weight', 'in', 'out']:
+        EnsureDirExists(os.path.join(matrix_dir, mode))
+
     hooks = []
     count = 0
     for n, m in model.named_modules():
@@ -57,11 +68,22 @@ def main():
             #print(n, m, m.weight.shape)
             prune.l1_unstructured(m, name="weight", amount=sparsity[count])
             saveTensor(args, n, 'weight', m.weight) # alexnet have bias, ignore it for now
+            sparse_weight = m.weight.detach() # (K, C, R, S)
+            K = sparse_weight.shape[0]
+            sparse_weight = sparse_weight.view(K, -1) # (K, C*R*S)
+            sparse_weight = sparse_weight.permute(1, 0).contiguous() # (C*R*S, K)
+            print(n, m, sparse_weight.shape)
+            np.save(f"{matrix_dir}/weight/{n}.npy", sparse_weight.cpu().numpy())
+
             handle1 = m.register_forward_hook(get_activation(args, n, 'in', in_activation, out_activation))
             handle2 = m.register_forward_hook(get_activation(args, n, 'out', in_activation, out_activation))
+            handle3 = m.register_forward_hook(saveMatrix(args, n, 'in', in_activation_matrix, out_activation_matrix))
+            handle4 = m.register_forward_hook(saveMatrix(args, n, 'out', in_activation_matrix, out_activation_matrix))
             #print(m.getSparseWeight())
             hooks.append(handle1)
             hooks.append(handle2)
+            hooks.append(handle3)
+            hooks.append(handle4)
             count += 1
 
         # export fc
